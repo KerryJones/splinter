@@ -24,7 +24,7 @@ class FantasyTrader extends Trader {
         parent::__construct($exchange);
 
         $this->account = Account::create([
-            'name' => 'Fantasy - ' . Carbon::now()->toDateTimeString(),
+            'name' => 'Fantasy Trader - ' . Carbon::now()->toDateTimeString(),
             'sandbox' => true
         ]);
 
@@ -33,9 +33,27 @@ class FantasyTrader extends Trader {
 
     /**
      */
-    protected function trade() {
+    public function trade() {
         AccountTrade::create([
-
+            'account_id',
+            'exchange_id',
+            'market',
+            'type',
+            'position',
+            'side',
+            'status',
+            'currency',
+            'asset',
+            'currency_per_asset',
+            'asset_size',
+            'currency_slippage_percentage',
+            'currency_splippage',
+            'currency_fee_percentage',
+            'currency_fee',
+            'currency_total',
+            'reason',
+            'recreate',
+            'datetime' => Carbon::now()->toDateTimeString()
         ]);
     }
 }

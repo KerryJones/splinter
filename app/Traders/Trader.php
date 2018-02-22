@@ -23,7 +23,7 @@ abstract class Trader {
         return $this->exchange;
     }
 
-    protected function trade() {
+    public function trade() {
 
     }
 }

@@ -34,7 +34,6 @@ class AccountTrade extends Model
      * @var array
      */
     protected $fillable = [
-        'id',
         'account_id',
         'exchange_id',
         'market',

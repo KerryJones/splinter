@@ -163,9 +163,6 @@ class Indicators
      * @return mixed
      */
     public function atr($length) {
-        // It does 1 less
-        $length++;
-
         $atr = trader_atr($this->high($length), $this->low($length), $this->close($length), $length-1);
 
         return array_pop($atr);
