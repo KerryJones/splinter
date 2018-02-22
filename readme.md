@@ -3,12 +3,13 @@
 Splinter is a back-testing framework to test various strategies across cryptocurrencies.
 
 The name has come from the Ninja Turtles trainer, Splinter:  
+
 ![Image of Splinter](http://cdn2-www.superherohype.com/assets/uploads/2012/06/file_171063_8_1832775-bow.jpg)
 
 ## Roadmap  
 - [x] Get source of data  
 - [ ] Create structure for strategy testing  
-- [ ] Create basic/easy to use variables (like Trading View)  
+- [X] Create basic/easy to use variables (like Trading View)  
 - [ ] Be able to back test any date range with different time units (1h, 2h, 4h, 8h, 12h, 1d)  
 - [ ] Create easy rules:  
 	- [ ] "total active trades"  
@@ -17,7 +18,7 @@ The name has come from the Ninja Turtles trainer, Splinter:
 - [ ] Easily create Stop-Loss
 - [ ] Create Sell-Limit Orders
 - [ ] Create ease of back-testing
-	- [ ] Specify pair, date-range, strategy
+	- [X] Specify pair, date-range, strategy
 	- [ ] Return 
 		- [ ] % up or down
 		- [ ] % drawdown
