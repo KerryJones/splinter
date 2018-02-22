@@ -4,9 +4,17 @@ namespace App\Strategies;
 use App\Libraries\Indicators;
 use App\Models\Exchange;
 use App\Models\ExchangeCandle;
+use App\Traders\Trader;
 use Carbon\Carbon;
 
 abstract class Strategy {
+    /**
+     * Holds onto the trader
+     *
+     * @var Trader
+     */
+    protected $trader;
+
     /**
      * Holds the exchange in case we need to backfill
      *
@@ -75,19 +83,22 @@ abstract class Strategy {
      */
     private $candle_index = 0;
 
+    /****** ABSTACT FUNCTIONS *****/
+    abstract protected function executeStrategy(ExchangeCandle $candle);
+
     /**
      * Create a new Strategy model instance.
      *
-     * @param Exchange $exchange
+     * @param Trader $trader
      * @param $currency
      * @param $asset
      * @param Carbon $from
      * @param Carbon $to
      * @param int $interval
      */
-    public function __construct(Exchange $exchange, $currency, $asset, Carbon $from, Carbon $to, $interval = 4)
+    public function __construct(Trader $trader, $currency, $asset, Carbon $from, Carbon $to, $interval = 4)
     {
-        $this->exchange = $exchange;
+        $this->exchange = $trader->getExchange();
         $this->currency = $currency;
         $this->asset = $asset;
         $this->from = $from;
@@ -109,7 +120,7 @@ abstract class Strategy {
             $this->candle_key = $key;
             $this->indicators->setCandleIndex($key);
 
-            $this->enter($candle);
+            $this->executeStrategy($candle);
         });
     }
 
@@ -119,15 +130,19 @@ abstract class Strategy {
      * @param int $offset
      * @return ExchangeCandle[]
      */
-    public function backfill($offset) {
-        $from = $this->from->copy()->subHours($offset * $this->interval);
-        $to = $this->from;
+    public function backfill($candles, $offset) {
+        $first_candle_datetime = $candles->first()->datetime;
+        $from = $first_candle_datetime->copy()->subHours($offset * $this->interval);
+        $to = $first_candle_datetime->copy()->subHours($this->interval);
 
-        return $this->exchange->getCandlesByInterval($this->currency, $this->asset, $from, $to, $this->interval);
+        $new_candles = $this->exchange->getCandlesByInterval($this->currency, $this->asset, $from, $to, $this->interval);
+
+        $candles->each(function($candle) use($new_candles) {
+            $new_candles->push($candle);
+        });
+
+        return $new_candles;
     }
-
-    abstract protected function enter(ExchangeCandle $candle);
-    abstract protected function exit(ExchangeCandle $candle);
 
     /***** ALIASES *****/
 

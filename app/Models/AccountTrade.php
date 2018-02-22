@@ -7,8 +7,24 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class AccountTrade extends Model
 {
-    const TYPE_CREDIT = 'credit';
-    const TYPE_DEBIT = 'debit';
+    const MARKET_CRYPTO = 'crypto';
+    const MARKET_STOCK = 'stock';
+    const MARKET_FOREX = 'forex';
+    const MARKET_COMMODITIES = 'commodities';
+
+    const TYPE_LIMIT = 'limit';
+    const TYPE_MARKET = 'market';
+    const TYPE_STOP = 'stop';
+
+    const POSITION_LONG = 'long';
+    const POSITION_SHORT = 'short';
+
+    const SIDE_BUY = 'buy';
+    const SIDE_SELL = 'sell';
+
+    const STATUS_OPEN = 'open';
+    const STATUS_FILLED = 'filled';
+    const STATUS_CANCELED = 'canceled';
 
     use SoftDeletes;
 
@@ -21,7 +37,22 @@ class AccountTrade extends Model
         'id',
         'account_id',
         'exchange_id',
-        'amount',
+        'market',
+        'type',
+        'position',
+        'side',
+        'status',
+        'currency',
+        'asset',
+        'currency_per_asset',
+        'asset_size',
+        'currency_slippage_percentage',
+        'currency_splippage',
+        'currency_fee_percentage',
+        'currency_fee',
+        'currency_total',
+        'reason',
+        'recreate',
         'datetime'
     ];
 

@@ -2,7 +2,7 @@
 
 Splinter is a back-testing framework to test various strategies across cryptocurrencies.
 
-Roadmap:  
+## Roadmap  
 - [x] Get source of data  
 - [ ] Create structure for strategy testing  
 - [ ] Create basic/easy to use variables (like Trading View)  

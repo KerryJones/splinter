@@ -4,6 +4,7 @@ namespace App\Libraries;
 
 use App\Models\ExchangeCandle;
 use App\Strategies\Strategy;
+use Illuminate\Database\Eloquent\Collection;
 
 class Indicators
 {
@@ -35,7 +36,8 @@ class Indicators
      */
     private $candle_offset = 0;
 
-    public function __construct(Strategy $strategy, array $candles) {
+    public function __construct(Strategy $strategy, Collection $candles) {
+        $this->strategy = $strategy;
         $this->candles = $candles;
     }
 
@@ -57,7 +59,7 @@ class Indicators
      * @return array
      */
     protected function open($length) {
-        return $this->getRange('high', $length);
+        return $this->getRange('open', $length);
     }
 
     /**
@@ -77,7 +79,7 @@ class Indicators
      * @return array
      */
     protected function low($length) {
-        return $this->getRange('high', $length);
+        return $this->getRange('low', $length);
     }
 
     /**
@@ -87,7 +89,7 @@ class Indicators
      * @return array
      */
     protected function close($length) {
-        return $this->getRange('high', $length);
+        return $this->getRange('close', $length);
     }
 
     /**
@@ -98,7 +100,7 @@ class Indicators
      * @return array
      */
     protected function getRange($attribute, $length) {
-        return $this->getSlicedCandles($length)->pluck($attribute);
+        return $this->getSlicedCandles($length)->pluck($attribute)->toArray();
     }
 
     /**
@@ -144,8 +146,8 @@ class Indicators
         // We might need to backfill the candles
         if(!is_null($length) && $index < $length) {
             $this->candle_offset += $length - $index;
-            $older_candles = $this->strategy->backfill($this->candle_offset);
-            $this->candles = $older_candles + $this->candles;
+            $this->candles = $this->strategy->backfill($this->candles, $this->candle_offset);
+
             $index = $this->candle_index + $this->candle_offset;
         }
 
@@ -161,6 +163,23 @@ class Indicators
      * @return mixed
      */
     public function atr($length) {
-        return array_pop(trader_atr($this->high($length), $this->low($length), $this->close($length), $length));
+        // It does 1 less
+        $length++;
+
+        $atr = trader_atr($this->high($length), $this->low($length), $this->close($length), $length-1);
+
+        return array_pop($atr);
+    }
+
+    /**
+     * Get the true range for a length
+     *
+     * @param $length
+     * @return mixed
+     */
+    public function tr($length) {
+        $tr = trader_trange($this->high($length), $this->low($length), $this->close($length));
+
+        return array_pop($tr);
     }
 }

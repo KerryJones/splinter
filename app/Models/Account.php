@@ -10,12 +10,18 @@ class Account extends Model
     use SoftDeletes;
 
     /**
+     * Hold the account ledger
+     *
+     * @var AccountLedger
+     */
+    protected $account_ledger;
+
+    /**
      * The attributes that are mass assignable.
      *
      * @var array
      */
     protected $fillable = [
-        'id',
         'user_id',
         'name',
         'sandbox'
@@ -29,5 +35,15 @@ class Account extends Model
     public function exchanges()
     {
         return $this->belongsToMany(\App\Models\Exchange::class, 'account_exchange', 'account_id', 'exchange_id');
+    }
+
+    /**
+     * @return AccountLedger
+     */
+    public function getLedgerAttribute() {
+        if(is_null($this->account_ledger))
+            $this->account_ledger = new AccountLedger($this);
+
+        return $this->account_ledger;
     }
 }

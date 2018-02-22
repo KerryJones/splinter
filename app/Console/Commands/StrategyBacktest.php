@@ -4,6 +4,8 @@ namespace App\Console\Commands;
 
 use App\Models\Exchange;
 use App\Models\ExchangeCandle;
+use App\Strategies\Turtle;
+use App\Traders\FantasyTrader;
 use Carbon\Carbon;
 use function Couchbase\defaultDecoder;
 use Illuminate\Console\Command;
@@ -37,19 +39,16 @@ class StrategyBacktest extends Command
 
     /**
      * Execute the console command.
-     *
-     * @return mixed
      */
     public function handle()
     {
-        $exchange = Exchange::findOrFail(1);
+        $exchange = Exchange::findOrFail(1); // Bitfinex2
+        $trader = new FantasyTrader($exchange, 100000);
         $from = Carbon::now()->subMonth();
         $to = Carbon::now();
-        $candles = $exchange->getCandlesByInterval('USD', 'BTC', $from, $to);
 
-        $candles->each(function(ExchangeCandle $candle) {
-
-        });
+        $strategy = new Turtle($trader, 'USD', 'BTC', $from, $to);
+        $strategy->backtest();
     }
 
 }
