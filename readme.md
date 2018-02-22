@@ -2,6 +2,9 @@
 
 Splinter is a back-testing framework to test various strategies across cryptocurrencies.
 
+The name has come from the Ninja Turtles trainer, Splinter:  
+![Image of Splinter](http://cdn2-www.superherohype.com/assets/uploads/2012/06/file_171063_8_1832775-bow.jpg)
+
 ## Roadmap  
 - [x] Get source of data  
 - [ ] Create structure for strategy testing  
