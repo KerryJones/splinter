@@ -32,6 +32,11 @@ class Turtle extends Strategy {
     protected $atr_length = 20;
 
     /**
+     * Max units in a single market
+     */
+    protected $max_units_per_market = 4;
+
+    /**
      * This unit size is calculated for every candle
      *
      * @var float
@@ -57,7 +62,7 @@ class Turtle extends Strategy {
     }
 
     /**
-     * Offers ability to change this
+     * Offers ability to change ATR length
      *
      * @param int $length
      */
@@ -66,11 +71,20 @@ class Turtle extends Strategy {
     }
 
     /**
+     * Ability to change how many units per market
+     *
+     * @param int $units
+     */
+    public function setMaxUnitsPerMarket($units = 4) {
+        $this->max_units_per_market = $units;
+    }
+
+    /**
      * @param ExchangeCandle $candle
      */
     protected function executeStrategy(ExchangeCandle $candle) {
         $n = $this->indicators->atr($this->atr_length);
-        $this->unit_size = $this->trader->account->account_size / ($n / $candle->close);
+        $this->unit_size = $this->account->getAccountSize() / ($n / $candle->close);
 
         $this->enter($candle);
         $this->exit($candle);
@@ -87,12 +101,20 @@ class Turtle extends Strategy {
 
         // Long check
         if($candle->high > $highest) {
+            dd('LONG');
             $this->buy(AccountTrade::POSITION_LONG);
         }
 
         // Short check
         if($candle->low < $lowest) {
-            $this->buy(AccountTrade::POSITION_SHORT);
+            // What can we do to recreate this
+            $recreate = [
+                'low' => $candle->low,
+                'lowest' => $lowest,
+                'donchian_break_out_length' => $this->donchian_break_out_length,
+            ];
+
+            $this->buy($candle, AccountTrade::POSITION_SHORT, 'Donchian channels indicate a short', $recreate);
         }
     }
 
@@ -119,20 +141,56 @@ class Turtle extends Strategy {
     }
 
 
-    protected function trade($side, $position) {
-        // $this->trader->trade(...)
+    /**
+     * Perform an actual trade
+     *
+     * @param ExchangeCandle $candle
+     * @param $side
+     * @param $position
+     * @param $type
+     * @param $reason
+     * @param $recreate
+     * @return mixed
+     */
+    protected function trade(ExchangeCandle $candle, $side, $position, $type, $reason, $recreate) {
+        return $this->trader->trade($candle, $type, $position, $side, $this->unit_size, $reason, $recreate);
     }
 
-    /********** ALIASES ***********/
-    protected function buy($position) {
+    /********** ALIASES **********/
+
+    /**
+     * Performs a buy
+     *
+     * @param ExchangeCandle $candle
+     * @param $position
+     * @param $reason
+     * @param $recreate
+     * @return bool|mixed
+     */
+    protected function buy(ExchangeCandle $candle, $position, $reason, $recreate) {
         // Need to create stop orders...
-        // $this->trader->trade
-        return $this->trade(AccountTrade::SIDE_BUY, $position);
+        $units = $this->trader->getUnitsForMarket($this->currency, $this->asset);
+
+        if($units >= $this->max_units_per_market) {
+            // Log something here
+            return false;
+        }
+
+        return $this->trade($candle, AccountTrade::SIDE_BUY, $position, AccountTrade::TYPE_LIMIT, $reason, $recreate);
     }
 
-    protected function sell($position) {
+    /**
+     * Performs a sell
+     *
+     * @param ExchangeCandle $candle
+     * @param $position
+     * @param $reason
+     * @param $recreate
+     * @return mixed
+     */
+    protected function sell(ExchangeCandle $candle, $position, $reason, $recreate) {
         // Need to create limit orders...
 
-        return $this->trade(AccountTrade::SIDE_SELL, $position);
+        return $this->trade($candle, AccountTrade::SIDE_SELL, $position, AccountTrade::TYPE_LIMIT, $reason, $recreate);
     }
 }

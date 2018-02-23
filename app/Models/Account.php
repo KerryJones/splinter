@@ -46,4 +46,13 @@ class Account extends Model
 
         return $this->account_ledger;
     }
+
+    /**
+     * Alias for ledger balance
+     *
+     * @return float
+     */
+    public function getAccountSize() {
+        return $this->ledger->getBalance();
+    }
 }

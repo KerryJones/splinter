@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Models\Account;
 use App\Models\Exchange;
 use App\Models\ExchangeCandle;
 use App\Strategies\Turtle;
@@ -42,12 +43,28 @@ class StrategyBacktest extends Command
      */
     public function handle()
     {
+        // Setup a new account
+        $account = Account::create([
+            'name' => 'Fantasy Trader - ' . Carbon::now()->toDateTimeString(),
+            'sandbox' => true
+        ]);
+
+        $account->ledger->deposit(100000);
+
+        // Which exchange do we want
         $exchange = Exchange::findOrFail(1); // Bitfinex2
-        $trader = new FantasyTrader($exchange, 100000);
+
+        // Create a trader (fantasy, alerts, live, etc)
+        $trader = new FantasyTrader($exchange, $account);
+
+        // Date range
         $from = Carbon::now()->subMonth();
         $to = Carbon::now();
 
-        $strategy = new Turtle($trader, 'USD', 'BTC', $from, $to);
+        // Create the strategy
+        $strategy = new Turtle($exchange, $trader, $account, 'USD', 'BTC', $from, $to);
+
+        // Run backtest
         $strategy->backtest();
     }
 

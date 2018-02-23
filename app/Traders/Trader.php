@@ -1,7 +1,9 @@
 <?php
 namespace App\Traders;
 
+use App\Models\Account;
 use App\Models\Exchange;
+use App\Models\ExchangeCandle;
 
 abstract class Trader {
     /**
@@ -11,9 +13,17 @@ abstract class Trader {
      */
     protected $exchange;
 
-    public function __construct(Exchange $exchange)
+    /**
+     * Hold the account for this run
+     *
+     * @var Account
+     */
+    protected $account;
+
+    public function __construct(Exchange $exchange, Account $account)
     {
         $this->exchange = $exchange;
+        $this->account = $account;
     }
 
     /**
@@ -23,7 +33,7 @@ abstract class Trader {
         return $this->exchange;
     }
 
-    public function trade() {
-
-    }
+    abstract function trade(ExchangeCandle $candle, $type, $position, $side, $unit_size, $reason, $recreate);
+    abstract function getUnitsForPosition($currency, $asset, $position);
+    abstract function getUnitsForMarket($currency, $asset);
 }

@@ -26,7 +26,7 @@ class CreateAccountTradesTable extends Migration
             $table->string('asset', 10); // BTC
             $table->decimal('currency_per_asset', 16, 8); // $14,500.78
             $table->decimal('asset_size', 16, 8); // 1.00005000
-            $table->decimal('currency_slippage_percentage', 16, 8); // 5%
+            $table->decimal('currency_slippage_percentage', 16, 8); // .05%
             $table->decimal('currency_slippage', 16, 8); // $8.00
             $table->decimal('currency_fee_percentage', 6, 6); // .25%
             $table->decimal('currency_fee', 16, 8); // $5.00

@@ -2,6 +2,7 @@
 namespace App\Strategies;
 
 use App\Libraries\Indicators;
+use App\Models\Account;
 use App\Models\Exchange;
 use App\Models\ExchangeCandle;
 use App\Traders\Trader;
@@ -9,11 +10,11 @@ use Carbon\Carbon;
 
 abstract class Strategy {
     /**
-     * Holds onto the trader
+     * Holds the account to get relevant data
      *
-     * @var Trader
+     * @var Account
      */
-    protected $trader;
+    protected $account;
 
     /**
      * Holds the exchange in case we need to backfill
@@ -21,6 +22,13 @@ abstract class Strategy {
      * @var Exchange
      */
     protected $exchange;
+
+    /**
+     * Holds onto the trader
+     *
+     * @var Trader
+     */
+    protected $trader;
 
     /**
      * The primary symbol (currency) you are using to buy or sell.
@@ -96,9 +104,11 @@ abstract class Strategy {
      * @param Carbon $to
      * @param int $interval
      */
-    public function __construct(Trader $trader, $currency, $asset, Carbon $from, Carbon $to, $interval = 4)
+    public function __construct(Exchange $exchange, Trader $trader, Account $account, $currency, $asset, Carbon $from, Carbon $to, $interval = 4)
     {
-        $this->exchange = $trader->getExchange();
+        $this->exchange = $exchange;
+        $this->trader = $trader;
+        $this->account = $account;
         $this->currency = $currency;
         $this->asset = $asset;
         $this->from = $from;

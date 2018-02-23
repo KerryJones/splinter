@@ -11,6 +11,8 @@ class Exchange extends Model
 {
     use SoftDeletes;
 
+    const FEE_PERCENTAGE = .25;
+
     /**
      * The attributes that are mass assignable.
      *

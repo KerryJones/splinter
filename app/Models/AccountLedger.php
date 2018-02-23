@@ -61,10 +61,9 @@ class AccountLedger
     public function deposit($amount)
     {
         $amount = (float) preg_replace("/[^0-9.]/", '', $amount);
-        $amount = round_up($amount, 2);
 
         $ledger_item = AccountLedgerItem::create([
-            'tenant_id' => $this->account->id,
+            'account_id' => $this->account->id,
             'amount' => $amount,
             'type' => AccountLedgerItem::TYPE_DEBIT,
             'datetime' => Carbon::now()->toDateTimeString(),
