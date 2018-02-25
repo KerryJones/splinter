@@ -51,7 +51,7 @@ class StrategyBacktest extends Command
         ]);
         $console->writeln('<info>New account created: #' . $account->id . ' - ' . $account->name . '</info>');
 
-        $initial_deposit = 100000;
+        $initial_deposit = 1000000;
         $account->ledger->deposit($initial_deposit);
         $console->writeln('<info>Initial deposit of $' . number_format($initial_deposit) . ' deposited</info>');
 
@@ -63,12 +63,12 @@ class StrategyBacktest extends Command
         $trader = new FantasyTrader($exchange, $account);
 
         // Date range
-        $from = Carbon::now()->subMonth();
+        $from = Carbon::now()->subMonths(5);
         $to = Carbon::now();
 
         // Create the strategy
-        $strategy = new Turtle($exchange, $trader, $account, 'USD', 'BTC', $from, $to, 4, $console);
-        $console->writeln('New strategy implemented to perform backtest: ' . 'USDBTC' . ' - ' . $from->toDateTimeString() . ' > ' . $to->toDateTimeString());
+        $strategy = new Turtle($exchange, $trader, $account, 'USD', 'ETH', $from, $to, 4, $console);
+        $console->writeln('New strategy implemented to perform backtest: ' . 'USDETH' . ' - ' . $from->toDateTimeString() . ' > ' . $to->toDateTimeString());
 
         // Run backtest
         $strategy->backtest();

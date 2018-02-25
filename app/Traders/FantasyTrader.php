@@ -4,7 +4,9 @@ namespace App\Traders;
 use App\Models\AccountTrade;
 use App\Models\Exchange;
 use App\Models\ExchangeCandle;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use SebastianBergmann\Diff\Output\AbstractChunkOutputBuilder;
 
 class FantasyTrader extends Trader {
     const SLIPPAGE_PERCENT = 0.5;
@@ -12,32 +14,42 @@ class FantasyTrader extends Trader {
     /**
      * Perform a fantasy trade
      *
-     * @param ExchangeCandle $candle
      * @param string $currency
      * @param string $asset
      * @param string $type
      * @param string $position
      * @param string $side
      * @param float $amount
+     * @param float $currency_of_asset
+     * @param Carbon $datetime
      * @param string $reason
      * @param array $recreate
      * @param string|null group_id
      * @return AccountTrade
      */
-    public function trade(ExchangeCandle $candle, $currency, $asset, $type, $position, $side, $amount, $reason, array $recreate, $group_id = null) {
+    public function trade($currency, $asset, $type, $position, $side, $amount, $currency_of_asset, Carbon $datetime, $reason, array $recreate, $group_id = null) {
         // Dealing with currency
         list($slippage, $slippage_percentage) = $this->calculateSplippage($amount, $type);
         list($fee, $fee_percentage) = $this->calculateFee($amount);
 
-        if($side == AccountTrade::SIDE_BUY) {
+        if ($side == AccountTrade::SIDE_BUY) {
             $currency_amount = $amount - $slippage - $fee;
-            $asset_size = round($currency_amount / $candle->close, 8);
+            $asset_size = round($currency_amount / $currency_of_asset, 8);
             $currency_fee = $fee;
         } else {
             $asset_size = $amount - $slippage - $fee;
-            $currency_amount = round($asset_size * $candle->close, 8);
-            $currency_fee = round($fee * $candle->close, 8);
-            $slippage = round($slippage * $candle->close, 8);
+            $currency_amount = round($asset_size * $currency_of_asset, 8);
+            $currency_fee = round($fee * $currency_of_asset, 8);
+            $slippage = round($slippage * $currency_of_asset, 8);
+        }
+
+        // Stop Order
+        if($type == AccountTrade::TYPE_STOP) {
+            $status = AccountTrade::STATUS_OPEN;
+            $date_filled = null;
+        } else {
+            $status = AccountTrade::STATUS_FILLED;
+            $date_filled = $datetime->toDateTimeString();
         }
 
         return AccountTrade::create([
@@ -47,10 +59,10 @@ class FantasyTrader extends Trader {
             'type' => $type,
             'position' => $position,
             'side' => $side,
-            'status' => AccountTrade::STATUS_FILLED,
+            'status' => $status,
             'currency' => $currency,
             'asset' => $asset,
-            'currency_per_asset' => $candle->close,
+            'currency_per_asset' => $currency_of_asset,
             'asset_size' => $asset_size,
             'currency_slippage_percentage' => $slippage_percentage,
             'currency_slippage' => $slippage,
@@ -60,7 +72,8 @@ class FantasyTrader extends Trader {
             'reason' => $reason,
             'recreate' => json_encode($recreate),
             'group_id' => $group_id,
-            'datetime' => $candle->datetime->toDateTimeString()
+            'datetime' => $datetime->toDateTimeString(),
+            'date_filled' => $date_filled
         ]);
     }
 
@@ -73,22 +86,15 @@ class FantasyTrader extends Trader {
      * @return integer
      */
     public function getUnitsForPosition($currency, $asset, $position) {
-        if($position == AccountTrade::POSITION_LONG) {
-            $count = DB::raw("SUM(IF(account_trades.side = 'buy', 1, 0)) - SUM(IF(account_trades.side = 'sell', 0, 0)) AS count");
-        } else {
-            $count = DB::raw("SUM(IF(account_trades.side = 'sell', 1, 0)) - SUM(IF(account_trades.side = 'buy', 0, 0)) AS count");
-        }
-
-        return AccountTrade::select($count)
+        $row = DB::table('vw_account_trade_units')
+            ->select(DB::raw('COALESCE(units, 0) AS units'))
             ->where('account_id', $this->account->id)
             ->where('exchange_id', $this->exchange->id)
-            ->where('status', AccountTrade::STATUS_FILLED)
-            ->where('type', '<>', AccountTrade::TYPE_STOP)
-            ->where('currency', $currency)
-            ->where('asset', $asset)
+            ->where('pair', $currency . $asset)
             ->where('position', $position)
-            ->first()
-            ->count;
+            ->first();
+
+        return $row ? $row->units : 0;
     }
 
     /**
@@ -140,6 +146,7 @@ class FantasyTrader extends Trader {
             ->where('account_trades.account_id', $this->account->id)
             ->where('account_trades.exchange_id', $this->exchange->id)
             ->where('account_trades.status', AccountTrade::STATUS_FILLED)
+            ->where('account_trades.side', AccountTrade::SIDE_BUY)
             ->where('account_trades.currency', $currency)
             ->where('account_trades.asset', $asset)
             ->where('account_trades.position', $position)
@@ -163,6 +170,7 @@ class FantasyTrader extends Trader {
             ->where('account_trades.account_id', $this->account->id)
             ->where('account_trades.exchange_id', $this->exchange->id)
             ->where('account_trades.status', AccountTrade::STATUS_FILLED)
+            ->where('account_trades.side', AccountTrade::SIDE_BUY)
             ->where('account_trades.currency', $currency)
             ->where('account_trades.asset', $asset)
             ->where('account_trades.position', $position)
@@ -170,6 +178,65 @@ class FantasyTrader extends Trader {
             ->where('vw_account_trade_groups.percent_in_market', '>', 2)
             ->orderBy('account_trades.datetime', 'DESC')
             ->first();
+    }
+
+    /**
+     * Get any open stops
+     *
+     * @param $currency
+     * @param $asset
+     * @return array
+     */
+    public function getOpenStops($currency, $asset)
+    {
+        $stop_trades = AccountTrade::where('account_id', $this->account->id)
+            ->where('exchange_id', $this->exchange->id)
+            ->where('currency', $currency)
+            ->where('asset', $asset)
+            ->where('type', AccountTrade::TYPE_STOP)
+            ->where('status', AccountTrade::STATUS_OPEN);
+
+        $long = $short = null;
+
+        $stop_trades->each(function(AccountTrade $trade) use(&$long, &$short) {
+            if($trade->position == AccountTrade::POSITION_LONG) {
+                $long = $trade;
+            } else {
+                $short = $trade;
+            }
+        });
+
+        return compact('long', 'short');
+    }
+
+    /**
+     * Fill an order
+     *
+     * @param AccountTrade $trade
+     * @param ExchangeCandle $candle
+     */
+    public function fillOrder(AccountTrade $trade, ExchangeCandle $candle) {
+        $trade->update([
+            'status' => AccountTrade::STATUS_FILLED,
+            'date_filled' => $candle->datetime->toDateTimeString()
+        ]);
+    }
+
+    /**
+     * Cancel any open stops
+     *
+     * @param $group_id
+     * @return bool
+     */
+    public function cancelStopsByGroup($group_id)
+    {
+        AccountTrade::where('account_id', $this->account->id)
+            ->where('exchange_id', $this->exchange->id)
+            ->where('group_id', $group_id)
+            ->where('type', AccountTrade::TYPE_STOP)
+            ->update(['status' => AccountTrade::STATUS_CANCELED]);
+
+        return true;
     }
 
     /**

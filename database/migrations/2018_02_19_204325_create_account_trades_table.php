@@ -35,6 +35,7 @@ class CreateAccountTradesTable extends Migration
             $table->text('recreate');
             $table->string('group_id', 128)->nullable();
             $table->dateTime('datetime');
+            $table->dateTime('date_filled')->nullable();
             $table->timestamps();
             $table->softDeletes();
 

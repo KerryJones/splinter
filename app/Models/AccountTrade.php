@@ -54,11 +54,13 @@ class AccountTrade extends Model
         'reason',
         'recreate',
         'group_id',
-        'datetime'
+        'datetime',
+        'date_filled'
     ];
 
     protected $dates = [
-        'datetime'
+        'datetime',
+        'date_filled'
     ];
 
     /**

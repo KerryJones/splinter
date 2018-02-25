@@ -126,8 +126,29 @@ class Turtle extends Strategy {
         $this->last_open_long_order = $this->getLastLongOrder();
         $this->last_open_short_order = $this->getLastShortOrder();
 
-        $this->exit($candle, ['atr' => $atr]);
+        // Exit first so that exits don't get trigger for enters
+        $this->checkStops($candle);
+        $this->exit($candle);
         $this->enter($candle, ['atr' => $atr]);
+    }
+
+    /**
+     * Check to see if there are any stops and fulfill then
+     *
+     * @param ExchangeCandle $candle
+     */
+    protected function checkStops(ExchangeCandle $candle) {
+        $stops = $this->trader->getOpenStops($this->currency, $this->asset);
+
+        if($stops['long'] && $stops['long']->currency_per_asset >= $candle->close) {
+            $this->console->writeln("\n<fg=red>Filling stop orders for long position at " . number_format($candle->close, 8) . '</>');
+            $this->trader->fillOrder($stops['long'], $candle);
+        }
+
+        if($stops['short'] && $stops['short']->currency_per_asset <= $candle->close) {
+            $this->console->writeln("\n<fg=red>Filling stop orders for short position at " . number_format($candle->close, 8) . '</>');
+            $this->trader->fillOrder($stops['short'], $candle);
+        }
     }
 
     /**
@@ -145,9 +166,17 @@ class Turtle extends Strategy {
                 $recreate = ['atr' => $this->last_open_long_order->recreate->atr];
                 $group_id = $this->last_open_long_order->group_id;
 
-                $this->buy($candle, AccountTrade::POSITION_LONG, 'Market increased by 0.5 * n over last order', $recreate, $group_id);
-            }
+                $trade = $this->buy($candle, AccountTrade::POSITION_LONG, 'Market increased by 0.5 * n over last order', $recreate, $group_id);
 
+                if($trade) {
+                    // Close out previous stops
+                    $this->trader->cancelStopsByGroup($group_id);
+
+                    // Create Stop Loss
+                    $this->stopLoss($candle, $trade, 'Added to existing group, updating stop-loss',
+                        ['atr' => $trade->recreate->atr]);
+                }
+            }
         } else {
             // We can do a new order!
             $highest = $this->highest($this->donchian_break_out_length);
@@ -162,7 +191,12 @@ class Turtle extends Strategy {
 
                 $group_id = Uuid::generate()->string;
 
-                $this->buy($candle, AccountTrade::POSITION_LONG, 'Donchian channels indicate a long', $recreate, $group_id);
+                // Buy
+                $trade = $this->buy($candle, AccountTrade::POSITION_LONG, 'Donchian channels indicate a long', $recreate, $group_id);
+
+                // Create Stop Loss
+                if($trade)
+                    $this->stopLoss($candle, $trade, 'Created a new group, setting stop-loss', ['atr' => $trade->recreate->atr]);
             }
         }
 
@@ -174,7 +208,15 @@ class Turtle extends Strategy {
                 $recreate = ['atr' => $this->last_open_short_order->recreate->atr];
                 $group_id = $this->last_open_short_order->group_id;
 
-                $this->buy($candle, AccountTrade::POSITION_SHORT, 'Market decreased by 0.5 * n over last order', $recreate, $group_id);
+                $trade = $this->buy($candle, AccountTrade::POSITION_SHORT, 'Market decreased by 0.5 * n over last order', $recreate, $group_id);
+
+                if($trade) {
+                    // Close out previous stops
+                    $this->trader->cancelStopsByGroup($group_id);
+
+                    // Create Stop Loss
+                    $this->stopLoss($candle, $trade, 'Added to existing group, updating stop-loss', ['atr' => $trade->recreate->atr]);
+                }
             }
         } else {
             $lowest = $this->lowest($this->donchian_break_out_length);
@@ -189,7 +231,11 @@ class Turtle extends Strategy {
 
                 $group_id = Uuid::generate()->string;
 
-                $this->buy($candle, AccountTrade::POSITION_SHORT, 'Donchian channels indicate a short', $recreate, $group_id);
+                $trade = $this->buy($candle, AccountTrade::POSITION_SHORT, 'Donchian channels indicate a short', $recreate, $group_id);
+
+                // Create Stop Loss
+                if($trade)
+                    $this->stopLoss($candle, $trade, 'Created a new group, setting stop-loss', ['atr' => $trade->recreate->atr]);
             }
         }
     }
@@ -243,7 +289,7 @@ class Turtle extends Strategy {
      * @return mixed
      */
     protected function trade(ExchangeCandle $candle, $amount, $side, $position, $type, $reason, array $recreate, $group_id) {
-        return $this->trader->trade($candle, $this->currency, $this->asset, $type, $position, $side, $amount, $reason, $recreate, $group_id);
+        return $this->trader->trade($this->currency, $this->asset, $type, $position, $side, $amount, $candle->close, $candle->datetime, $reason, $recreate, $group_id);
     }
 
     /**
@@ -277,7 +323,7 @@ class Turtle extends Strategy {
             // Log something here
             return false;
         } else {
-            $this->console->writeln("\n<fg=cyan>Buying $" . number_format($this->unit_size) . ' worth of ' . $this->asset . '</>');
+            $this->console->writeln("\n<fg=green>Buying $" . number_format($this->unit_size) . ' worth of ' . $this->asset . '</>');
         }
 
         return $this->trade($candle, $this->unit_size, AccountTrade::SIDE_BUY, $position, AccountTrade::TYPE_LIMIT, $reason, $recreate, $group_id);
@@ -298,10 +344,60 @@ class Turtle extends Strategy {
             return $amount + $order->asset_size;
         }, 0);
 
-        $this->console->writeln("\n<fg=cyan>Selling " . number_format($amount, 8) . ' of ' . $this->asset . '</>');
+        $this->console->writeln("\n<fg=red>Selling ~$" . number_format($amount * $candle->close, 8) . ' of ' . $this->asset . '</>');
 
+        // Cancel any stops
+        $this->cancelStopsByGroup($group_id);
 
-        return $this->trade($candle, $amount, AccountTrade::SIDE_SELL, $position, AccountTrade::TYPE_LIMIT, $reason, $recreate, $group_id);
+        // Do the sell
+        $trade = $this->trade($candle, $amount, AccountTrade::SIDE_SELL, $position, AccountTrade::TYPE_LIMIT, $reason, $recreate, $group_id);
+
+        // Refresh the last order
+        if($position == AccountTrade::POSITION_LONG) {
+            $this->last_open_long_order = $this->getLastLongOrder();
+        } else {
+            $this->last_open_short_order = $this->getLastShortOrder();
+        }
+
+        return $trade;
+    }
+
+    /**
+     * Create a Stop-Loss order
+     *
+     * @param ExchangeCandle $candle
+     * @param AccountTrade trade
+     * @param string $reason
+     * @param array $recreate
+     * @return AccountTrade
+     */
+    protected function stopLoss(ExchangeCandle $candle, AccountTrade $trade, $reason, array $recreate) {
+        // Get open orders
+        if($trade->position == AccountTrade::POSITION_LONG) {
+            $orders = $this->getOpenLongOrders();
+            $stop_at = $candle->close - $trade->recreate->atr * 2;
+        } else {
+            $orders = $this->getOpenShortOrders();
+            $stop_at = $candle->close + $trade->recreate->atr * 2;
+        }
+
+        // How much are we selling? (All of it)
+        $amount = $orders->reduce(function($amount, $order) {
+            return $amount + $order->asset_size;
+        }, 0);
+
+        $this->console->writeln("\n<fg=cyan>Setting a stop loss at $" . number_format($candle->close - $this->unit_size * 2, 8) . ' of ' . $this->asset . '</>');
+
+        return $this->trader->trade($this->currency, $this->asset, AccountTrade::TYPE_STOP, $trade->position, AccountTrade::SIDE_SELL, $amount, $stop_at, $candle->datetime, $reason, $recreate, $trade->group_id);
+    }
+
+    /**
+     * Cancel stops by group
+     *
+     * @param $group_id
+     */
+    public function cancelStopsByGroup($group_id) {
+        return $this->trader->cancelStopsByGroup($group_id);
     }
 
     /**
