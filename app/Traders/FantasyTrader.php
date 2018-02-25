@@ -13,19 +13,32 @@ class FantasyTrader extends Trader {
      * Perform a fantasy trade
      *
      * @param ExchangeCandle $candle
-     * @param $type
-     * @param $position
-     * @param $side
-     * @param $unit_size
-     * @param $reason
-     * @param $recreate
+     * @param string $currency
+     * @param string $asset
+     * @param string $type
+     * @param string $position
+     * @param string $side
+     * @param float $amount
+     * @param string $reason
+     * @param array $recreate
+     * @param string|null group_id
      * @return AccountTrade
      */
-    public function trade(ExchangeCandle $candle, $type, $position, $side, $unit_size, $reason, $recreate) {
-        list($slippage, $slippage_percentage) = $this->calculateSplippage($unit_size, $type);
-        list($currency_fee, $currency_fee_percentage) = $this->calculateFee($unit_size);
-        $currency_amount = $unit_size - $slippage - $currency_fee;
-        $asset_size = round($currency_amount / $candle->close, 8);
+    public function trade(ExchangeCandle $candle, $currency, $asset, $type, $position, $side, $amount, $reason, array $recreate, $group_id = null) {
+        // Dealing with currency
+        list($slippage, $slippage_percentage) = $this->calculateSplippage($amount, $type);
+        list($fee, $fee_percentage) = $this->calculateFee($amount);
+
+        if($side == AccountTrade::SIDE_BUY) {
+            $currency_amount = $amount - $slippage - $fee;
+            $asset_size = round($currency_amount / $candle->close, 8);
+            $currency_fee = $fee;
+        } else {
+            $asset_size = $amount - $slippage - $fee;
+            $currency_amount = round($asset_size * $candle->close, 8);
+            $currency_fee = round($fee * $candle->close, 8);
+            $slippage = round($slippage * $candle->close, 8);
+        }
 
         return AccountTrade::create([
             'account_id' => $this->account->id,
@@ -35,17 +48,18 @@ class FantasyTrader extends Trader {
             'position' => $position,
             'side' => $side,
             'status' => AccountTrade::STATUS_FILLED,
-            'currency' => $candle->currency,
-            'asset' => $candle->asset,
+            'currency' => $currency,
+            'asset' => $asset,
             'currency_per_asset' => $candle->close,
             'asset_size' => $asset_size,
             'currency_slippage_percentage' => $slippage_percentage,
-            'currency_splippage' => $slippage,
-            'currency_fee_percentage' => $currency_fee_percentage,
+            'currency_slippage' => $slippage,
+            'currency_fee_percentage' => $fee_percentage,
             'currency_fee' => $currency_fee,
-            'currency_total' => $unit_size,
+            'currency_total' => $currency_amount,
             'reason' => $reason,
-            'recreate' => $recreate,
+            'recreate' => json_encode($recreate),
+            'group_id' => $group_id,
             'datetime' => $candle->datetime->toDateTimeString()
         ]);
     }
@@ -87,6 +101,75 @@ class FantasyTrader extends Trader {
     public function getUnitsForMarket($currency, $asset) {
         return $this->getUnitsForPosition($currency, $asset, AccountTrade::POSITION_LONG)
             + $this->getUnitsForPosition($currency, $asset, AccountTrade::POSITION_SHORT);
+    }
+
+    /**
+     * Get all open orders for a position
+     *
+     * @param $currency
+     * @param $asset
+     * @param $position
+     * @return AccountTrade[]
+     */
+    public function getOpenOrdersForPosition($currency, $asset, $position) {
+        return AccountTrade::select('account_trades.*')
+            ->joinAccountTradeGroups()
+            ->where('account_trades.account_id', $this->account->id)
+            ->where('account_trades.exchange_id', $this->exchange->id)
+            ->where('account_trades.status', AccountTrade::STATUS_FILLED)
+            ->where('account_trades.currency', $currency)
+            ->where('account_trades.asset', $asset)
+            ->where('account_trades.position', $position)
+            // Make sure there is 2% or more in the market to be considered
+            ->where('vw_account_trade_groups.percent_in_market', '>', 2)
+            ->orderBy('account_trades.datetime', 'ASC')
+            ->get();
+    }
+
+    /**
+     * Returns the the first trade for a position
+     *
+     * @param $currency
+     * @param $asset
+     * @param $position
+     * @return AccountTrade
+     */
+    public function getFirstOpenOrderForPosition($currency, $asset, $position) {
+        return AccountTrade::select('account_trades.*')
+            ->joinAccountTradeGroups()
+            ->where('account_trades.account_id', $this->account->id)
+            ->where('account_trades.exchange_id', $this->exchange->id)
+            ->where('account_trades.status', AccountTrade::STATUS_FILLED)
+            ->where('account_trades.currency', $currency)
+            ->where('account_trades.asset', $asset)
+            ->where('account_trades.position', $position)
+            // Make sure there is 2% or more in the market to be considered
+            ->where('vw_account_trade_groups.percent_in_market', '>', 2)
+            ->orderBy('account_trades.datetime', 'ASC')
+            ->first();
+    }
+
+    /**
+     * Returns the the first trade for a position
+     *
+     * @param $currency
+     * @param $asset
+     * @param $position
+     * @return AccountTrade
+     */
+    public function getLastOpenOrderForPosition($currency, $asset, $position) {
+        return AccountTrade::select('account_trades.*')
+            ->joinAccountTradeGroups()
+            ->where('account_trades.account_id', $this->account->id)
+            ->where('account_trades.exchange_id', $this->exchange->id)
+            ->where('account_trades.status', AccountTrade::STATUS_FILLED)
+            ->where('account_trades.currency', $currency)
+            ->where('account_trades.asset', $asset)
+            ->where('account_trades.position', $position)
+            // Make sure there is 2% or more in the market to be considered
+            ->where('vw_account_trade_groups.percent_in_market', '>', 2)
+            ->orderBy('account_trades.datetime', 'DESC')
+            ->first();
     }
 
     /**

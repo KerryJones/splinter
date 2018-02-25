@@ -33,9 +33,12 @@ class CreateAccountTradesTable extends Migration
             $table->decimal('currency_total', 16, 8); // currency_per_asset * asset_size - slippage - fee
             $table->string('reason');
             $table->text('recreate');
+            $table->string('group_id', 128)->nullable();
             $table->dateTime('datetime');
             $table->timestamps();
             $table->softDeletes();
+
+            $table->index(['account_id', 'exchange_id']);
         });
     }
 

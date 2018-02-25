@@ -4,13 +4,11 @@ namespace App\Console\Commands;
 
 use App\Models\Account;
 use App\Models\Exchange;
-use App\Models\ExchangeCandle;
 use App\Strategies\Turtle;
 use App\Traders\FantasyTrader;
 use Carbon\Carbon;
-use function Couchbase\defaultDecoder;
 use Illuminate\Console\Command;
-use SebastianBergmann\Environment\Console;
+use Symfony\Component\Console\Helper\ProgressBar;
 
 class StrategyBacktest extends Command
 {
@@ -43,16 +41,23 @@ class StrategyBacktest extends Command
      */
     public function handle()
     {
+        // Setup console
+        $console = $this->output;
+
         // Setup a new account
         $account = Account::create([
             'name' => 'Fantasy Trader - ' . Carbon::now()->toDateTimeString(),
             'sandbox' => true
         ]);
+        $console->writeln('<info>New account created: #' . $account->id . ' - ' . $account->name . '</info>');
 
-        $account->ledger->deposit(100000);
+        $initial_deposit = 100000;
+        $account->ledger->deposit($initial_deposit);
+        $console->writeln('<info>Initial deposit of $' . number_format($initial_deposit) . ' deposited</info>');
 
         // Which exchange do we want
         $exchange = Exchange::findOrFail(1); // Bitfinex2
+        $console->writeln('Using Bitfinex for data');
 
         // Create a trader (fantasy, alerts, live, etc)
         $trader = new FantasyTrader($exchange, $account);
@@ -62,10 +67,12 @@ class StrategyBacktest extends Command
         $to = Carbon::now();
 
         // Create the strategy
-        $strategy = new Turtle($exchange, $trader, $account, 'USD', 'BTC', $from, $to);
+        $strategy = new Turtle($exchange, $trader, $account, 'USD', 'BTC', $from, $to, 4, $console);
+        $console->writeln('New strategy implemented to perform backtest: ' . 'USDBTC' . ' - ' . $from->toDateTimeString() . ' > ' . $to->toDateTimeString());
 
         // Run backtest
         $strategy->backtest();
+        $console->writeln("\n<info>Back-test has completed! Check DB for info</info>");
     }
 
 }

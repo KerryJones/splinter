@@ -33,7 +33,10 @@ abstract class Trader {
         return $this->exchange;
     }
 
-    abstract function trade(ExchangeCandle $candle, $type, $position, $side, $unit_size, $reason, $recreate);
+    abstract function trade(ExchangeCandle $candle, $currency, $asset, $type, $position, $side, $amount, $reason, array $recreate, $group_id = null);
     abstract function getUnitsForPosition($currency, $asset, $position);
     abstract function getUnitsForMarket($currency, $asset);
+    abstract function getOpenOrdersForPosition($currency, $asset, $position);
+    abstract function getFirstOpenOrderForPosition($currency, $asset, $position);
+    abstract function getLastOpenOrderForPosition($currency, $asset, $position);
 }

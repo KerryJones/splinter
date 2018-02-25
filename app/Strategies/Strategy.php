@@ -7,6 +7,9 @@ use App\Models\Exchange;
 use App\Models\ExchangeCandle;
 use App\Traders\Trader;
 use Carbon\Carbon;
+use Illuminate\Console\Command;
+use Illuminate\Console\OutputStyle;
+use Symfony\Component\Console\Output\Output;
 
 abstract class Strategy {
     /**
@@ -48,7 +51,6 @@ abstract class Strategy {
      */
     protected $asset;
 
-
     /**
      * The time interval for the candles expressed in hours
      *
@@ -69,6 +71,13 @@ abstract class Strategy {
      * @var Carbon
      */
     protected $to;
+
+    /**
+     * Hold the console to log out to
+     *
+     * @var OutputStyle
+     */
+    protected $console;
 
     /**
      * Holds all the candles that have been imported
@@ -97,14 +106,17 @@ abstract class Strategy {
     /**
      * Create a new Strategy model instance.
      *
+     * @param Exchange $exchange
      * @param Trader $trader
+     * @param Account $account
      * @param $currency
      * @param $asset
      * @param Carbon $from
      * @param Carbon $to
      * @param int $interval
+     * @param OutputStyle|null $console
      */
-    public function __construct(Exchange $exchange, Trader $trader, Account $account, $currency, $asset, Carbon $from, Carbon $to, $interval = 4)
+    public function __construct(Exchange $exchange, Trader $trader, Account $account, $currency, $asset, Carbon $from, Carbon $to, $interval = 4, OutputStyle $console = null)
     {
         $this->exchange = $exchange;
         $this->trader = $trader;
@@ -114,6 +126,7 @@ abstract class Strategy {
         $this->from = $from;
         $this->to = $to;
         $this->interval = $interval;
+        $this->console = $console;
 
         $this->candles = $this->exchange->getCandlesByInterval($this->currency, $this->asset, $this->from, $this->to,
             $this->interval
@@ -126,11 +139,14 @@ abstract class Strategy {
      * Run the main backtesting components
      */
     public function backtest() {
-        $this->candles->each(function(ExchangeCandle $candle, $key) {
+        $bar = $this->console->createProgressBar($this->candles->count());
+
+        $this->candles->each(function(ExchangeCandle $candle, $key) use($bar) {
             $this->candle_key = $key;
             $this->indicators->setCandleIndex($key);
 
             $this->executeStrategy($candle);
+            $bar->advance();
         });
     }
 
