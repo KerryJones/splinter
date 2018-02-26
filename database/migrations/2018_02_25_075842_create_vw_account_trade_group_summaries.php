@@ -21,6 +21,8 @@ class CreateVwAccountTradeGroupSummaries extends Migration
           account_trades.account_id,
           account_trades.exchange_id,
           account_trades.position,
+          MIN(account_trades.datetime) AS datetime_entry,
+          MAX(account_trades.datetime) AS datetime_exit,
           SUM(IF(side = 'buy', 1, 0)) AS units,
           IF(account_trades.position = 'long',
              SUM(IF(side = 'sell', currency_total, 0)) - SUM(IF(side = 'buy', currency_total, 0)),

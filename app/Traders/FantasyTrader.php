@@ -87,7 +87,7 @@ class FantasyTrader extends Trader {
      */
     public function getUnitsForPosition($currency, $asset, $position) {
         $row = DB::table('vw_account_trade_units')
-            ->select(DB::raw('COALESCE(units, 0) AS units'))
+            ->select(DB::raw('SUM(COALESCE(units, 0)) AS units'))
             ->where('account_id', $this->account->id)
             ->where('exchange_id', $this->exchange->id)
             ->where('pair', $currency . $asset)

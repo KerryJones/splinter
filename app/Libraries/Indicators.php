@@ -132,7 +132,7 @@ class Indicators
     public function getSlicedCandles($length) {
         $index = $this->getCandleIndex($length);
 
-        return $this->candles->slice($index - $length, $index);
+        return $this->candles->slice($index - $length, $length);
     }
 
     /**
@@ -140,7 +140,7 @@ class Indicators
      *
      * @return int
      */
-    protected function getCandleIndex($length = null) {
+    public function getCandleIndex($length = null) {
         $index = $this->candle_index + $this->candle_offset;
 
         // We might need to backfill the candles

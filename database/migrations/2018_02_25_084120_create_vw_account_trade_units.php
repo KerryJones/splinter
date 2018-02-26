@@ -19,12 +19,13 @@ class CreateVwAccountTradeUnits extends Migration
           SELECT
           account_id,
           exchange_id,
+          group_id,
           CONCAT(currency, asset) AS pair,
           position,
           SUM(IF(side = 'buy', 1, 0)) * IF(SUM(IF(side = 'sell', 1, 0)) >= 1, 0, 1) AS units
         FROM account_trades
         WHERE status = 'filled'
-        GROUP BY account_id, exchange_id, CONCAT(currency, asset), position;");
+        GROUP BY account_id, exchange_id, CONCAT(currency, asset), group_id, position;");
     }
 
     /**

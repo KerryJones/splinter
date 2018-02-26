@@ -63,16 +63,27 @@ class StrategyBacktest extends Command
         $trader = new FantasyTrader($exchange, $account);
 
         // Date range
-        $from = Carbon::now()->subMonths(5);
+        $from = Carbon::parse('2017-08-24 15:00:00');
         $to = Carbon::now();
 
         // Create the strategy
         $strategy = new Turtle($exchange, $trader, $account, 'USD', 'ETH', $from, $to, 4, $console);
+        $strategy->setDonchianBreakoutLength(9);
+        $strategy->setExitBreakoutLength(7);
+
         $console->writeln('New strategy implemented to perform backtest: ' . 'USDETH' . ' - ' . $from->toDateTimeString() . ' > ' . $to->toDateTimeString());
 
         // Run backtest
         $strategy->backtest();
-        $console->writeln("\n<info>Back-test has completed! Check DB for info</info>");
+
+        $console->writeln("\n<info>Backtest has completed!</info>");
+
+        $summary = $account->getSummary($exchange->id);
+        $rows = collect($summary)->map(function($value, $key) {
+            return [$key, $value];
+        })->toArray();
+
+        $this->table(['Attribute', 'Value'], $rows);
     }
 
 }
