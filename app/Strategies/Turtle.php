@@ -15,11 +15,41 @@ use Webpatser\Uuid\Uuid;
  */
 class Turtle extends Strategy {
     /**
+     * Record variables
+     * 
+     * @param array
+     */
+    protected $record_variables = [
+        'donchian_breakout_length',
+        'exit_breakout_length',
+        'atr_length',
+        'max_units_per_market',
+        'unit_size_account_percent',
+        'atr_multiplier',
+        'short',
+        'pyramid',
+    ];
+    
+    /**
      * Give tons of alerts
      *
      * @var bool
      */
     protected $verbose = false;
+    
+    /**
+     * Do we pyramid our orders
+     *
+     * @var bool
+     */
+    protected $pyramid = true;  
+    
+    /**
+     * Do we short
+     *
+     * @var bool
+     */
+    protected $short = true;
 
     /**
      * Turtles either did a fast system 20 day or a 55 day breakout
@@ -41,6 +71,20 @@ class Turtle extends Strategy {
      * @var integer
      */
     protected $atr_length = 20;
+    
+    /**
+     * Turtles set ATR multiplier to 2
+     *
+     * @var float
+     */
+    protected $atr_multiplier = 2;
+    
+    /**
+     * Turtles set pyramid ATR multiplier to 0.5
+     *
+     * @var float
+     */
+    protected $atr_pyramid_multiplier = 0.5;
 
     /**
      * Max units in a single market
@@ -85,6 +129,22 @@ class Turtle extends Strategy {
     public function setVerbose($verbose = true) {
         $this->verbose = $verbose;
     }
+    /**
+     * Offers ability to change us pyramiding orders
+     *
+     * @param bool $pyramid
+     */
+    public function setPyramid($pyramid = true) {
+        $this->pyramid = $pyramid;
+    }
+    /**
+     * Offers ability to change whether we short the market
+     *
+     * @param bool $short
+     */
+    public function setShort($short = true) {
+        $this->short = $short;
+    }
 
     /**
      * Offers ability to change the donchian breakout length
@@ -111,6 +171,24 @@ class Turtle extends Strategy {
      */
     public function setATRLength($length = 20) {
         $this->atr_length = $length;
+    }
+
+    /**
+     * Offers ability to change ATR multiplier
+     *
+     * @param int $multiplier
+     */
+    public function setATRMultiplier($multiplier = 2) {
+        $this->atr_multiplier = $multiplier;
+    }
+
+    /**
+     * Offers ability to change ATR pyramid multiplier
+     *
+     * @param float $multiplier
+     */
+    public function setATRPyramidMultiplier($multiplier = 0.5) {
+        $this->atr_pyramid_multiplier = $multiplier;
     }
 
     /**
@@ -177,23 +255,8 @@ class Turtle extends Strategy {
      */
     protected function enter(ExchangeCandle $candle, $indicators = []) {
         // Long check
-        if($this->last_open_long_order) {
-            // Do we increment? increase by 0.5(atr)
-            if($candle->close >= $this->last_open_long_order->currency_per_asset + (0.5 * $this->last_open_long_order->recreate->atr)) {
-                $recreate = ['atr' => $this->last_open_long_order->recreate->atr];
-                $group_id = $this->last_open_long_order->group_id;
-
-                $trade = $this->buy($candle, AccountTrade::POSITION_LONG, 'Market increased by 0.5 * n over last order', $recreate, $group_id);
-
-                if($trade) {
-                    // Close out previous stops
-                    $this->trader->cancelStopsByGroup($group_id);
-
-                    // Create Stop Loss
-                    $this->stopLoss($candle, $trade, 'Added to existing group, updating stop-loss',
-                        ['atr' => $trade->recreate->atr]);
-                }
-            }
+        if($this->pyramid && $this->last_open_long_order) {
+            $this->pyramidOrder($candle, AccountTrade::POSITION_LONG, $indicators);
         } else {
             // We can do a new order!
             $highest = $this->highest($this->donchian_break_out_length);
@@ -218,40 +281,28 @@ class Turtle extends Strategy {
         }
 
         // Short check
-        if($this->last_open_short_order) {
-            // Do we increment
-            if($candle->close <= $this->last_open_short_order->currency_per_asset - (0.5 * $this->last_open_short_order->recreate->atr)) {
-                $recreate = ['atr' => $this->last_open_short_order->recreate->atr];
-                $group_id = $this->last_open_short_order->group_id;
-
-                $trade = $this->buy($candle, AccountTrade::POSITION_SHORT, 'Market decreased by 0.5 * n over last order', $recreate, $group_id);
-
-                if($trade) {
-                    // Close out previous stops
-                    $this->trader->cancelStopsByGroup($group_id);
-
+        if($this->short) {
+            if($this->pyramid && $this->last_open_short_order) {
+                $this->pyramidOrder($candle, AccountTrade::POSITION_SHORT, $indicators);
+            } else {
+                $lowest = $this->lowest($this->donchian_break_out_length);
+    
+                if($candle->close < $lowest) {
+                    // What can we do to recreate this
+                    $recreate = $indicators + [
+                        'close' => $candle->close,
+                        'lowest' => $lowest,
+                        'donchian_break_out_length' => $this->donchian_break_out_length,
+                    ];
+    
+                    $group_id = Uuid::generate()->string;
+    
+                    $trade = $this->buy($candle, AccountTrade::POSITION_SHORT, 'Donchian channels indicate a short', $recreate, $group_id);
+    
                     // Create Stop Loss
-                    $this->stopLoss($candle, $trade, 'Added to existing group, updating stop-loss', ['atr' => $trade->recreate->atr]);
+                    if($trade)
+                        $this->stopLoss($candle, $trade, 'Created a new group, setting stop-loss', ['atr' => $trade->recreate->atr]);
                 }
-            }
-        } else {
-            $lowest = $this->lowest($this->donchian_break_out_length);
-
-            if($candle->close < $lowest) {
-                // What can we do to recreate this
-                $recreate = $indicators + [
-                    'close' => $candle->close,
-                    'lowest' => $lowest,
-                    'donchian_break_out_length' => $this->donchian_break_out_length,
-                ];
-
-                $group_id = Uuid::generate()->string;
-
-                $trade = $this->buy($candle, AccountTrade::POSITION_SHORT, 'Donchian channels indicate a short', $recreate, $group_id);
-
-                // Create Stop Loss
-                if($trade)
-                    $this->stopLoss($candle, $trade, 'Created a new group, setting stop-loss', ['atr' => $trade->recreate->atr]);
             }
         }
     }
@@ -290,6 +341,43 @@ class Turtle extends Strategy {
         }
     }
 
+    /**
+     * Pyramid an existing order
+     *
+     * @param ExchangeCandle $candle
+     * @param $position
+     * @param array $indicators
+     * @return AccountTrade|bool
+     */
+    protected function pyramidOrder(ExchangeCandle $candle, $position, $indicators = []) {
+        // Do we increment?
+        if($position == AccountTrade::POSITION_LONG && $candle->close >= $this->last_open_long_order->currency_per_asset + ($this->atr_pyramid_multiplier * $this->last_open_long_order->recreate->atr)) {
+            $recreate = ['atr' => $this->last_open_long_order->recreate->atr];
+            $group_id = $this->last_open_long_order->group_id;
+
+            $trade = $this->buy($candle, AccountTrade::POSITION_LONG, "Market increased by {$this->atr_pyramid_multiplier} * n over last order", $recreate, $group_id);
+        }
+
+        // Do we increment
+        if($position == AccountTrade::POSITION_SHORT && $candle->close <= $this->last_open_short_order->currency_per_asset - ($this->atr_pyramid_multiplier * $this->last_open_short_order->recreate->atr)) {
+            $recreate = ['atr' => $this->last_open_short_order->recreate->atr];
+            $group_id = $this->last_open_short_order->group_id;
+
+            $trade = $this->buy($candle, AccountTrade::POSITION_SHORT, "Market decreased by {$this->atr_pyramid_multiplier} * n over last order", $recreate, $group_id);
+        }
+
+        if(isset($trade) && isset($trade->id)) {
+            // Close out previous stops
+            $this->trader->cancelStopsByGroup($group_id);
+
+            // Create Stop Loss
+            $this->stopLoss($candle, $trade, 'Added to existing group, updating stop-loss', ['atr' => $trade->recreate->atr]);
+
+            return $trade;
+        }
+
+        return true;
+    }
 
     /**
      * Perform an actual trade
@@ -314,7 +402,7 @@ class Turtle extends Strategy {
      * @return float|int
      */
     protected function calculateUnitSize($n, ExchangeCandle $candle) {
-        return ($this->unit_size_account_percent * .001) * $this->account->getAccountSize() / ($n / $candle->close);
+        return ($this->unit_size_account_percent * .01) * $this->account->getAccountSize() / ($n / $candle->close);
     }
 
     /*       ***                          ***        */
@@ -390,10 +478,10 @@ class Turtle extends Strategy {
         // Get open orders
         if($trade->position == AccountTrade::POSITION_LONG) {
             $orders = $this->getOpenLongOrders();
-            $stop_at = $candle->close - $trade->recreate->atr * 2;
+            $stop_at = $candle->close - $trade->recreate->atr * $this->atr_multiplier;
         } else {
             $orders = $this->getOpenShortOrders();
-            $stop_at = $candle->close + $trade->recreate->atr * 2;
+            $stop_at = $candle->close + $trade->recreate->atr * $this->atr_multiplier;
         }
 
         // How much are we selling? (All of it)
@@ -482,5 +570,12 @@ class Turtle extends Strategy {
         }
 
         // Log it in the DB too...
+    }
+
+    /**
+     * @return string
+     */
+    protected function getName() {
+        return 'Turtle';
     }
 }

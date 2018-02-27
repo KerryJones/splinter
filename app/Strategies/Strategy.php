@@ -5,6 +5,7 @@ use App\Libraries\Indicators;
 use App\Models\Account;
 use App\Models\Exchange;
 use App\Models\ExchangeCandle;
+use App\Models\StrategyBacktest;
 use App\Traders\Trader;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
@@ -12,6 +13,15 @@ use Illuminate\Console\OutputStyle;
 use Symfony\Component\Console\Output\Output;
 
 abstract class Strategy {
+    /**
+     * Record variables
+     *
+     * @param array
+     */
+    protected $record_variables = [
+        // i.e. 'donchian_breakout_length',
+    ];
+
     /**
      * Holds the account to get relevant data
      *
@@ -102,6 +112,7 @@ abstract class Strategy {
 
     /****** ABSTACT FUNCTIONS *****/
     abstract protected function executeStrategy(ExchangeCandle $candle);
+    abstract protected function getName();
 
     /**
      * Create a new Strategy model instance.
@@ -137,6 +148,8 @@ abstract class Strategy {
 
     /**
      * Run the main backtesting components
+     *
+     * @return StrategyBacktest
      */
     public function backtest() {
         $bar = $this->console->createProgressBar($this->candles->count());
@@ -148,6 +161,18 @@ abstract class Strategy {
             $this->executeStrategy($candle);
             $bar->advance();
         });
+
+        return StrategyBacktest::create([
+            'account_id' => $this->account->id,
+            'exchange_id' => $this->exchange->id,
+            'strategy' => $this->getName(),
+            'from' => $this->from->toDateTimeString(),
+            'to' => $this->to->toDateTimeString(),
+            'currency' => $this->currency,
+            'asset' => $this->asset,
+            'interval' => $this->interval,
+            'records' => $this->gatherRecords()
+        ]);
     }
 
     /**
@@ -190,5 +215,21 @@ abstract class Strategy {
      */
     public function lowest($length) {
         return $this->indicators->lowest($length);
+    }
+
+    /**
+     * Get any records we want to track
+     *
+     * @return string
+     */
+    protected function gatherRecords() {
+        $records = [];
+
+        foreach($this->record_variables as $key) {
+            if(isset($this->$key))
+                $records[$key] = $this->$key;
+        }
+
+        return json_encode($records);
     }
 }

@@ -179,4 +179,19 @@ class Indicators
 
         return array_pop($tr);
     }
+
+    /**
+     * Get the MACD of an array
+     *
+     * @param array $real
+     * @param int $fast_period
+     * @param int $slow_period
+     * @param int $signal_period
+     * @return mixed
+     */
+    public function macd(array $real, $fast_period = 12, $slow_period = 26, $signal_period = 9) {
+        $macd = trader_macd($real, $fast_period, $slow_period, $signal_period);
+
+        return array_pop($macd);
+    }
 }

@@ -57,6 +57,10 @@ class ImportExchange extends Command
                 $ccxt_exchange = new \ccxt\binance();
             break;
 
+            case 'bitstamp':
+                $ccxt_exchange = new \ccxt\bitstamp();
+            break;
+
             case 'bitfinex2':
                 $ccxt_exchange = new \ccxt\bitfinex2();
             break;
@@ -118,6 +122,12 @@ class ImportExchange extends Command
 
             $candles->each(function ($candle) use ($data, $mysql_now, $splinter_exchange, $interval, $bar, $currency, $asset) {
                 $datetime = Carbon::createFromTimestamp($candle[0] / 1000);
+
+//                if($datetime->gte(Carbon::parse('2017-06-01'))) {
+//                    $this->comment('Reached arbitrary end');
+//                    $bar->finish();
+//                    return false;
+//                }
 
                 $data->push([
                     'exchange_id' => $splinter_exchange->id,

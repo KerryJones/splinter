@@ -74,11 +74,11 @@ class StrategyBacktest extends Command
         $console->writeln('New strategy implemented to perform backtest: ' . 'USDETH' . ' - ' . $from->toDateTimeString() . ' > ' . $to->toDateTimeString());
 
         // Run backtest
-        $strategy->backtest();
+        $backtest = $strategy->backtest();
 
-        $console->writeln("\n<info>Backtest has completed!</info>");
+        $console->writeln("\n<info>Backtest #{$backtest->id} has completed!</info>");
 
-        $summary = $account->getSummary($exchange->id);
+        $summary = $backtest->getSummary();
         $rows = collect($summary)->map(function($value, $key) {
             return [$key, $value];
         })->toArray();
