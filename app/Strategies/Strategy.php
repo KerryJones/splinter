@@ -2,17 +2,18 @@
 namespace App\Strategies;
 
 use App\Libraries\Indicators;
+use App\Traits\Profiler;
 use App\Models\Account;
 use App\Models\Exchange;
 use App\Models\ExchangeCandle;
 use App\Models\StrategyBacktest;
 use App\Traders\Trader;
 use Carbon\Carbon;
-use Illuminate\Console\Command;
 use Illuminate\Console\OutputStyle;
-use Symfony\Component\Console\Output\Output;
 
 abstract class Strategy {
+    use Profiler;
+
     /**
      * Record variables
      *
@@ -162,7 +163,12 @@ abstract class Strategy {
             $bar->advance();
         });
 
-        return StrategyBacktest::create([
+        $groups = $this->get_profiler_groups();
+        if(!empty($groups) > 0) {
+            $this->console->table(['Group Name', 'Avg Length', 'Total Length'], $groups) ;
+        }
+
+        $backtest = StrategyBacktest::create([
             'account_id' => $this->account->id,
             'exchange_id' => $this->exchange->id,
             'strategy' => $this->getName(),
@@ -173,6 +179,18 @@ abstract class Strategy {
             'interval' => $this->interval,
             'records' => $this->gatherRecords()
         ]);
+
+        $summary = $backtest->getSummary();
+
+        $backtest->winning_trades = $summary['winning_groups'];
+        $backtest->losing_trades = $summary['losing_groups'];
+        $backtest->total_trades = $backtest->winning_trades + $backtest->losing_trades;
+        $backtest->drawdown_percentage = 0;
+        $backtest->profit_percentage = (float) str_replace('%', '', $summary['profit_percent']);
+        $backtest->buy_and_hold_percentage = ($this->candles->last()->close - $this->candles->first()->close) / $this->candles->first()->close * 100;
+        $backtest->save();
+
+        return $backtest;
     }
 
     /**

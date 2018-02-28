@@ -238,11 +238,13 @@ class Turtle extends Strategy {
         if($stops['long'] && $stops['long']->currency_per_asset >= $candle->close) {
             $this->log('Filling stop orders for long position at ' . number_format($candle->close, 8), 'red');
             $this->trader->fillOrder($stops['long'], $candle);
+            $this->last_open_long_order = $this->getLastLongOrder();
         }
 
         if($stops['short'] && $stops['short']->currency_per_asset <= $candle->close) {
             $this->log('Filling stop orders for short position at ' . number_format($candle->close, 8), 'red');
             $this->trader->fillOrder($stops['short'], $candle);
+            $this->last_open_short_order = $this->getLastShortOrder();
         }
     }
 

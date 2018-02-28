@@ -23,8 +23,14 @@ class CreateStrategyBacktestsTable extends Migration
             $table->string('currency', 20);
             $table->string('asset', 20);
             $table->string('interval', 20);
-            $table->text('records');
             $table->timestamps();
+            $table->decimal('total_trades', 16, 8)->nullable();
+            $table->decimal('winning_trades', 16, 8)->nullable();
+            $table->decimal('losing_trades', 16, 8)->nullable();
+            $table->decimal('drawdown_percentage', 16, 8)->nullable();
+            $table->decimal('profit_percentage', 16, 8)->nullable();
+            $table->decimal('buy_and_hold_percentage', 16, 8)->nullable();
+            $table->text('records');
             $table->softDeletes();
 
             $table->index(['account_id', 'exchange_id']);

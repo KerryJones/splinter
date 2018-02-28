@@ -26,7 +26,7 @@
         <div class="navbar-menu">
 
             <div class="navbar-end">
-                <a class="navbar-item" href="/">
+                <a class="navbar-item" href="{!! action('HomeController@index') !!}">
                     Home
                 </a>
                 <a class="navbar-item" href="/documentation/overview/start/">
@@ -38,12 +38,8 @@
 </nav>
 <section class="section">
     <div class="container">
-        <h1 class="title">
-            Hello World
-        </h1>
-        <p class="subtitle">
-            My first website with <strong>Bulma</strong>!
-        </p>
+        @yield('content')
+
     </div>
 </section>
 </body>

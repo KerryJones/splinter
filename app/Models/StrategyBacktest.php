@@ -24,7 +24,13 @@ class StrategyBacktest extends Model
         'from',
         'to',
         'interval',
-        'records'
+        'records',
+        'total_trades',
+        'winning_trades',
+        'losing_trades',
+        'drawdown_percentage',
+        'profit_percentage',
+        'buy_and_hold_percentage'
     ];
 
     protected $dates = [

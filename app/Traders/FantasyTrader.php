@@ -12,6 +12,14 @@ class FantasyTrader extends Trader {
     const SLIPPAGE_PERCENT = 0.5;
 
     /**
+     * Determine if we want to cache results -- much faster, possibly less reliable
+     */
+    const CACHE = true;
+
+    protected $last_open_long_position = null;
+    protected $last_open_short_position = null;
+
+    /**
      * Perform a fantasy trade
      *
      * @param string $currency
@@ -52,7 +60,7 @@ class FantasyTrader extends Trader {
             $date_filled = $datetime->toDateTimeString();
         }
 
-        return AccountTrade::create([
+        $trade = AccountTrade::create([
             'account_id' => $this->account->id,
             'exchange_id' => $this->exchange->id,
             'market' => AccountTrade::MARKET_CRYPTO,
@@ -75,6 +83,10 @@ class FantasyTrader extends Trader {
             'datetime' => $datetime->toDateTimeString(),
             'date_filled' => $date_filled
         ]);
+
+        $this->updateLastOpenPositions($trade);
+
+        return $trade;
     }
 
     /**
@@ -105,8 +117,14 @@ class FantasyTrader extends Trader {
      * @return integer
      */
     public function getUnitsForMarket($currency, $asset) {
-        return $this->getUnitsForPosition($currency, $asset, AccountTrade::POSITION_LONG)
-            + $this->getUnitsForPosition($currency, $asset, AccountTrade::POSITION_SHORT);
+        $row = DB::table('vw_account_trade_units')
+            ->select(DB::raw('SUM(COALESCE(units, 0)) AS units'))
+            ->where('account_id', $this->account->id)
+            ->where('exchange_id', $this->exchange->id)
+            ->where('pair', $currency . $asset)
+            ->first();
+
+        return $row ? $row->units : 0;
     }
 
     /**
@@ -165,7 +183,13 @@ class FantasyTrader extends Trader {
      * @return AccountTrade
      */
     public function getLastOpenOrderForPosition($currency, $asset, $position) {
-        return AccountTrade::select('account_trades.*')
+        if(self::CACHE && $position == AccountTrade::POSITION_LONG && !is_null($this->last_open_long_position)) {
+            return $this->last_open_long_position;
+        } elseif(self::CACHE && $position == AccountTrade::POSITION_SHORT && !is_null($this->last_open_short_position)) {
+            return $this->last_open_short_position;
+        }
+
+        $trade = AccountTrade::select('account_trades.*')
             ->joinAccountTradeGroups()
             ->where('account_trades.account_id', $this->account->id)
             ->where('account_trades.exchange_id', $this->exchange->id)
@@ -178,6 +202,21 @@ class FantasyTrader extends Trader {
             ->where('vw_account_trade_groups.percent_in_market', '>', 2)
             ->orderBy('account_trades.datetime', 'DESC')
             ->first();
+
+        if(!self::CACHE)
+            return $trade;
+
+        if(!is_null($trade)) {
+            $this->updateLastOpenPositions($trade);
+        } else {
+            if($position == AccountTrade::POSITION_LONG) {
+                $this->last_open_long_position = false;
+            } elseif($position == AccountTrade::POSITION_SHORT) {
+                $this->last_open_short_position = false;
+            }
+        }
+
+        return $trade;
     }
 
     /**
@@ -220,6 +259,12 @@ class FantasyTrader extends Trader {
             'status' => AccountTrade::STATUS_FILLED,
             'date_filled' => $candle->datetime->toDateTimeString()
         ]);
+
+        if($trade->position == AccountTrade::POSITION_LONG) {
+            $this->last_open_long_position = false;
+        } else {
+            $this->last_open_short_position = false;
+        }
     }
 
     /**
@@ -261,5 +306,29 @@ class FantasyTrader extends Trader {
      */
     protected function calculateFee($amount) {
         return [$amount * (Exchange::FEE_PERCENTAGE * .001), Exchange::FEE_PERCENTAGE];
+    }
+
+    /**
+     * Updates the cache
+     *
+     * @param AccountTrade $trade
+     */
+    protected function updateLastOpenPositions(AccountTrade $trade) {
+        if($trade->status != AccountTrade::STATUS_FILLED)
+            return;
+
+        if ($trade->side == AccountTrade::SIDE_BUY) {
+            if($trade->position == AccountTrade::POSITION_LONG) {
+                $this->last_open_long_position = $trade;
+            } else {
+                $this->last_open_short_position = $trade;
+            }
+        } else {
+            if($trade->position == AccountTrade::POSITION_LONG) {
+                $this->last_open_long_position = null;
+            } else {
+                $this->last_open_short_position = null;
+            }
+        }
     }
 }
