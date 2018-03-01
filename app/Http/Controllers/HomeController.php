@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\StrategyBacktest;
 use Illuminate\Http\Request;
 
 class HomeController extends Controller
@@ -11,6 +12,9 @@ class HomeController extends Controller
      * @return \Illuminate\Contracts\View\Factory|\Illuminate\View\View
      */
     public function index() {
-        return view('home');
+        $backtest = StrategyBacktest::orderBy('id', 'DESC')->first();
+
+        return view('home')
+            ->with(compact('backtest'));
     }
 }
