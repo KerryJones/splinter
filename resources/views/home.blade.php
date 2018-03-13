@@ -60,7 +60,7 @@
 
             //"color": "#fff",
             "dataSets": [{
-                "title": "MSFT",
+                "title": "{{ $backtest->currency }}/{{ $backtest->asset }}",
                 "fieldMappings": [{
                     "fromField": "Open",
                     "toField": "open"
@@ -78,18 +78,17 @@
                     "toField": "volume"
                 }],
                 "compared": false,
-                "categoryField": "Date",
+                "categoryField": "DateTime",
 
                 /**
                  * data loader for data set data
                  */
                 "dataLoader": {
-                    "url": "https://www.amcharts.com/wp-content/uploads/assets/stock/MSFT.csv",
+                    "url": "{!! action('BacktestsController@getCandlesCsv', $backtest->id) !!}",
                     "format": "csv",
                     "showCurtain": true,
                     "showErrors": true,
                     "async": true,
-                    "reverse": true,
                     "delimiter": ",",
                     "useColumnNames": true
                 },
@@ -98,70 +97,40 @@
                  * data loader for events data
                  */
                 "eventDataLoader": {
-                    "url": "https://www.amcharts.com/wp-content/uploads/assets/stock/MSFT_events.csv",
+                    "url": "{!! action('BacktestsController@getTradesCsv', $backtest->id) !!}",
                     "format": "csv",
                     "showCurtain": true,
                     "showErrors": true,
                     "async": true,
-                    "reverse": true,
                     "delimiter": ",",
                     "useColumnNames": true,
                     "postProcess": function (data) {
                         for (var x in data) {
                             switch (data[x].Type) {
-                                case 'A':
+                                case 'BS':
+                                case 'BL':
                                     var color = "#85CDE6";
-                                    break;
+                                break;
                                 default:
                                     var color = "#cccccc";
                                     break;
                             }
-                            data[x].Description = data[x].Description.replace("Upgrade", "<strong style=\"color: #0c0\">Upgrade</strong>").replace("Downgrade", "<strong style=\"color: #c00\">Downgrade</strong>");
                             data[x] = {
                                 "type": "pin",
                                 "graph": "g1",
                                 "backgroundColor": color,
-                                "date": data[x].Date,
+                                "date": data[x].DateTime,
                                 "text": data[x].Type,
                                 "description": "<strong>" + data[x].Title + "</strong><br />" + data[x].Description
                             };
                         }
+                        console.log(data);
                         return data;
                     }
                 }
 
-            }, {
-                "title": "TXN",
-                "fieldMappings": [{
-                    "fromField": "Open",
-                    "toField": "open"
-                }, {
-                    "fromField": "High",
-                    "toField": "high"
-                }, {
-                    "fromField": "Low",
-                    "toField": "low"
-                }, {
-                    "fromField": "Close",
-                    "toField": "close"
-                }, {
-                    "fromField": "Volume",
-                    "toField": "volume"
-                }],
-                "compared": true,
-                "categoryField": "Date",
-                "dataLoader": {
-                    "url": "https://www.amcharts.com/wp-content/uploads/assets/stock/TXN.csv",
-                    "format": "csv",
-                    "showCurtain": true,
-                    "showErrors": true,
-                    "async": true,
-                    "reverse": true,
-                    "delimiter": ",",
-                    "useColumnNames": true
-                }
             }],
-            "dataDateFormat": "YYYY-MM-DD",
+            "dataDateFormat": "YYYY-MM-DD JJ:HH:SS",
 
             "panels": [{
                 "title": "Value",
@@ -287,26 +256,21 @@
             "periodSelector": {
                 "position": "bottom",
                 "periods": [{
+                    "period": "hh",
+                    "count": 4,
+                    "label": "4H"
+                }, {
+                    "period": "hh",
+                    "count": 6,
+                    "label": "6H"
+                }, {
                     "period": "DD",
-                    "count": 10,
-                    "label": "10D"
+                    "count": 1,
+                    "label": "1D"
                 }, {
                     "period": "MM",
                     "count": 1,
                     "label": "1M"
-                }, {
-                    "period": "MM",
-                    "count": 6,
-                    "label": "6M"
-                }, {
-                    "period": "YYYY",
-                    "count": 1,
-                    "label": "1Y"
-                }, {
-                    "period": "YYYY",
-                    "count": 2,
-                    "selected": true,
-                    "label": "2Y"
                 },
                     /* {
                          "period": "YTD",
@@ -323,4 +287,35 @@
 
     <!-- HTML -->
     <div id="chartdiv"></div>
+    <br><br>
+    <h2>Trades</h2>
+    <!-- Show Orders -->
+    <table class="table" id="trades-table">
+        <thead>
+            <tr>
+                <th>Date Filled</th>
+                <th>Type</th>
+                <th>Price</th>
+                <th>Units</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach($backtest->getTrades() as $trade)
+            <tr>
+                <td>{{ $trade->date_filled->format('Y-m-d @ ga') }}</td>
+                <td>
+                    {{ $trade->side }} {{ $trade->position }} - {{ $trade->type }}
+                </td>
+                <td>${{ number_format($trade->currency_per_asset, 2) }}</td>
+                <td>{{ $trade->asset_size }}</td>
+            </tr>
+            @endforeach
+        </tbody>
+    </table>
+@endsection
+
+@section('footer')
+    <script type="text/javascript">
+        $('#trades-table').DataTable();
+    </script>
 @endsection

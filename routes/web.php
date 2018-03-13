@@ -12,3 +12,7 @@
 */
 
 Route::get('/', 'HomeController@index');
+Route::get('/backtest/{backtest}/get-candles-csv', 'BacktestsController@getCandlesCsv');
+Route::get('/backtest/{backtest}/get-trades-csv', 'BacktestsController@getTradesCsv');
+Route::get('/backtest/{backtest}/export', 'BacktestsController@export');
+

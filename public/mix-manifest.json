@@ -1,5 +1,7 @@
 {
     "/js/app.js": "/js/app.js?id=22c0e0583a1dfdf2821d",
-    "/css/app.css": "/css/app.css?id=7f6686f3d5c3c69ec86f",
-    "/css/bulma.css": "/css/bulma.css?id=2d03005979a6bef5e2c3"
+    "/css/app.css": "/css/app.css?id=be3320f4125beaf82eb1",
+    "/css/bulma.css": "/css/bulma.css?id=2d03005979a6bef5e2c3",
+    "/css/dataTables.bulma.css": "/css/dataTables.bulma.css?id=97f43698a62f459c106c",
+    "/js/dataTables.bulma.min.js": "/js/dataTables.bulma.min.js?id=db1640efed2fd4d61454"
 }

@@ -3,9 +3,6 @@ namespace App\Strategies;
 
 use App\Models\AccountTrade;
 use App\Models\ExchangeCandle;
-use Carbon\Carbon;
-use ccxt\Exchange;
-use Illuminate\Database\Eloquent\Collection;
 use Webpatser\Uuid\Uuid;
 
 /**
@@ -42,7 +39,7 @@ class Turtle extends Strategy {
      *
      * @var bool
      */
-    protected $pyramid = true;  
+    protected $pyramid = true;
     
     /**
      * Do we short
@@ -106,6 +103,20 @@ class Turtle extends Strategy {
      * @var float
      */
     protected $unit_size;
+
+    /**
+     * This is all the open long orders
+     *
+     * @var AccountTrade[]
+     */
+    protected $open_long_orders;
+
+    /**
+     * This is all the open short orders
+     *
+     * @var AccountTrade[]
+     */
+    protected $open_short_orders;
 
     /**
      * This is the last open long order, if there is one
@@ -214,12 +225,24 @@ class Turtle extends Strategy {
      * @throws \Exception
      */
     protected function executeStrategy(ExchangeCandle $candle) {
+        // Get ATR & Unit Size
         $atr = $this->indicators->atr($this->atr_length);
-        $this->unit_size = $this->calculateUnitSize($atr, $candle);
 
-        // Get last open orders
-        $this->last_open_long_order = $this->getLastLongOrder();
-        $this->last_open_short_order = $this->getLastShortOrder();
+        // Get open orders
+        if(is_null($this->open_long_orders))
+            $this->open_long_orders = collect();
+
+        if(is_null($this->open_short_orders))
+            $this->open_short_orders = collect();
+
+        $this->last_open_long_order = $this->open_long_orders->count() ? $this->open_long_orders->last() : false;
+        $this->last_open_short_order = $this->open_short_orders->count() ? $this->open_short_orders->last() : false;
+
+        // Calculate
+        $timer = $this->profiler_avg('calculateDrawDown');
+        $this->calculateDrawDown($candle);
+        $timer->stop();
+        $this->calculateUnitSize($atr, $candle);
 
         // Exit first so that exits don't get trigger for enters
         $this->checkStops($candle);
@@ -238,13 +261,17 @@ class Turtle extends Strategy {
         if($stops['long'] && $stops['long']->currency_per_asset >= $candle->close) {
             $this->log('Filling stop orders for long position at ' . number_format($candle->close, 8), 'red');
             $this->trader->fillOrder($stops['long'], $candle);
-            $this->last_open_long_order = $this->getLastLongOrder();
+
+            // How will we trade the group ids?
+            $this->open_long_orders = null;
+            $this->last_open_long_order = null;
         }
 
         if($stops['short'] && $stops['short']->currency_per_asset <= $candle->close) {
             $this->log('Filling stop orders for short position at ' . number_format($candle->close, 8), 'red');
             $this->trader->fillOrder($stops['short'], $candle);
-            $this->last_open_short_order = $this->getLastShortOrder();
+            $this->open_short_orders = null;
+            $this->last_open_short_order = null;
         }
     }
 
@@ -277,8 +304,13 @@ class Turtle extends Strategy {
                 $trade = $this->buy($candle, AccountTrade::POSITION_LONG, 'Donchian channels indicate a long', $recreate, $group_id);
 
                 // Create Stop Loss
-                if($trade)
-                    $this->stopLoss($candle, $trade, 'Created a new group, setting stop-loss', ['atr' => $trade->recreate->atr]);
+                if($trade) {
+                    $this->open_long_orders->put($trade->id, $trade);
+                    $this->stopLoss($candle, $trade, 'Created a new group, setting stop-loss',
+                        ['atr' => $trade->recreate->atr]);
+
+                }
+
             }
         }
 
@@ -300,10 +332,14 @@ class Turtle extends Strategy {
                     $group_id = Uuid::generate()->string;
     
                     $trade = $this->buy($candle, AccountTrade::POSITION_SHORT, 'Donchian channels indicate a short', $recreate, $group_id);
-    
+
+
                     // Create Stop Loss
-                    if($trade)
-                        $this->stopLoss($candle, $trade, 'Created a new group, setting stop-loss', ['atr' => $trade->recreate->atr]);
+                    if($trade) {
+                        $this->open_short_orders->put($trade->id, $trade);
+                        $this->stopLoss($candle, $trade, 'Created a new group, setting stop-loss',
+                            ['atr' => $trade->recreate->atr]);
+                    }
                 }
             }
         }
@@ -327,7 +363,7 @@ class Turtle extends Strategy {
                 'close' => $candle->close
             ];
 
-            $this->sell($candle, $this->getOpenLongOrders(), AccountTrade::POSITION_LONG, $reason, $recreate, $this->last_open_long_order->group_id);
+            $this->sell($candle, $this->open_long_orders, AccountTrade::POSITION_LONG, $reason, $recreate, $this->last_open_long_order->group_id);
         }
 
         // Short check
@@ -339,7 +375,7 @@ class Turtle extends Strategy {
                 'close' => $candle->close
             ];
 
-            $this->sell($candle, $this->getOpenShortOrders(), AccountTrade::POSITION_SHORT, $reason, $recreate, $this->last_open_short_order->group_id);
+            $this->sell($candle, $this->open_short_orders, AccountTrade::POSITION_SHORT, $reason, $recreate, $this->last_open_short_order->group_id);
         }
     }
 
@@ -358,6 +394,7 @@ class Turtle extends Strategy {
             $group_id = $this->last_open_long_order->group_id;
 
             $trade = $this->buy($candle, AccountTrade::POSITION_LONG, "Market increased by {$this->atr_pyramid_multiplier} * n over last order", $recreate, $group_id);
+            $this->open_long_orders->put($trade->id, $trade);
         }
 
         // Do we increment
@@ -366,6 +403,7 @@ class Turtle extends Strategy {
             $group_id = $this->last_open_short_order->group_id;
 
             $trade = $this->buy($candle, AccountTrade::POSITION_SHORT, "Market decreased by {$this->atr_pyramid_multiplier} * n over last order", $recreate, $group_id);
+            $this->open_short_orders->put($trade->id, $trade);
         }
 
         if(isset($trade) && isset($trade->id)) {
@@ -399,12 +437,40 @@ class Turtle extends Strategy {
     }
 
     /**
+     * Calculate the unit size to trade with
+     *
      * @param $n
      * @param ExchangeCandle $candle
      * @return float|int
      */
     protected function calculateUnitSize($n, ExchangeCandle $candle) {
-        return ($this->unit_size_account_percent * .01) * $this->account->getAccountSize() / ($n / $candle->close);
+        $this->unit_size = ($this->unit_size_account_percent * .01) * $this->account->getAccountSize() / ($n / $candle->close);
+
+        return $this->unit_size;
+    }
+
+    /**
+     * @param ExchangeCandle $candle
+     * @return float|int
+     */
+    protected function calculateDrawdown(ExchangeCandle $candle) {
+        $balance = $this->account->getTradeBalance();
+
+        if($this->open_long_orders->count()) {
+            $balance += $this->open_long_orders->reduce(function($value, $order) use ($candle) {
+                return $value + ($order->asset_size * $candle->close - $order->currency_total);
+            }, 0);
+        }
+
+        if($this->open_short_orders->count()) {
+            $balance += $this->open_short_orders->reduce(function($value, $order) use ($candle) {
+                return $value + ($order->currency_total - $order->asset_size * $candle->close);
+            }, 0);
+        }
+
+        $this->drawdown = min($this->drawdown, $this->account->getAccountSize() + $balance);
+
+        return $this->drawdown;
     }
 
     /*       ***                          ***        */
@@ -456,12 +522,15 @@ class Turtle extends Strategy {
 
         // Do the sell
         $trade = $this->trade($candle, $amount, AccountTrade::SIDE_SELL, $position, AccountTrade::TYPE_LIMIT, $reason, $recreate, $group_id);
+        $this->updateGroupId($orders, $trade->group_id);
 
         // Refresh the last order
         if($position == AccountTrade::POSITION_LONG) {
-            $this->last_open_long_order = $this->getLastLongOrder();
+            $this->last_open_long_order = null;
+            $this->open_long_orders = null;
         } else {
-            $this->last_open_short_order = $this->getLastShortOrder();
+            $this->last_open_short_order = null;
+            $this->open_short_orders = null;
         }
 
         return $trade;
@@ -479,10 +548,10 @@ class Turtle extends Strategy {
     protected function stopLoss(ExchangeCandle $candle, AccountTrade $trade, $reason, array $recreate) {
         // Get open orders
         if($trade->position == AccountTrade::POSITION_LONG) {
-            $orders = $this->getOpenLongOrders();
+            $orders = $this->open_long_orders;
             $stop_at = $candle->close - $trade->recreate->atr * $this->atr_multiplier;
         } else {
-            $orders = $this->getOpenShortOrders();
+            $orders = $this->open_short_orders;
             $stop_at = $candle->close + $trade->recreate->atr * $this->atr_multiplier;
         }
 
@@ -493,7 +562,18 @@ class Turtle extends Strategy {
 
         $this->log("Setting a stop loss at $" . number_format($stop_at) . ' of ' . $this->asset, 'cyan');
 
-        return $this->trader->trade($this->currency, $this->asset, AccountTrade::TYPE_STOP, $trade->position, AccountTrade::SIDE_SELL, $amount, $stop_at, $candle->datetime, $reason, $recreate, $trade->group_id);
+        $trade = $this->trader->trade($this->currency, $this->asset, AccountTrade::TYPE_STOP, $trade->position, AccountTrade::SIDE_SELL, $amount, $stop_at, $candle->datetime, $reason, $recreate, $trade->group_id);
+        $this->updateGroupId($orders, $trade->group_id);
+
+        return $trade;
+    }
+
+    /**
+     * @param $orders
+     * @param $group_id
+     */
+    protected function updateGroupId($orders, $group_id) {
+        $this->trader->updateGroupId($orders, $group_id);
     }
 
     /**
@@ -517,7 +597,7 @@ class Turtle extends Strategy {
     /**
      * Get all open short orders
      *
-     * @return AccountTrade
+     * @return AccountTrade[]
      */
     protected function getOpenShortOrders() {
         return $this->trader->getOpenOrdersForPosition($this->currency, $this->asset, AccountTrade::POSITION_SHORT);

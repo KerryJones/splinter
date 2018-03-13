@@ -49,6 +49,16 @@ class StrategyBacktest extends Model
     }
 
     /**
+     * An account backtest belongs to an exchange
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
+     */
+    public function exchange()
+    {
+        return $this->belongsTo(\App\Models\Exchange::class);
+    }
+
+    /**
      * Gets the summary of an account
      *
      * @return mixed
@@ -88,5 +98,22 @@ class StrategyBacktest extends Model
             ->first();
 
         return collect(array_merge($trade_summary, $group_summary));
+    }
+
+    /**
+     * @return mixed
+     */
+    public function getCandles() {
+        return $this->exchange->getCandlesByInterval($this->currency, $this->asset, $this->from, $this->to, $this->interval);
+    }
+
+    /**
+     * Get trades
+     *
+     * @param $status
+     * @return mixed
+     */
+    public function getTrades($status = AccountTrade::STATUS_FILLED) {
+        return $this->account->getTrades($status);
     }
 }

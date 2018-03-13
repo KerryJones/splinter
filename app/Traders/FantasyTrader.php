@@ -5,6 +5,7 @@ use App\Models\AccountTrade;
 use App\Models\Exchange;
 use App\Models\ExchangeCandle;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use SebastianBergmann\Diff\Output\AbstractChunkOutputBuilder;
 
@@ -265,6 +266,21 @@ class FantasyTrader extends Trader {
         } else {
             $this->last_open_short_position = false;
         }
+    }
+
+    /**
+     * Update group id for orders
+     *
+     * @param $orders
+     * @param $group_id
+     * @return bool
+     */
+    public function updateGroupId($orders, $group_id)
+    {
+        AccountTrade::whereIn('id', $orders->pluck('id'))
+            ->update(['group_id' => $group_id]);
+
+        return true;
     }
 
     /**

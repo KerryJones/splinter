@@ -105,4 +105,14 @@ class AccountTrade extends Model
                 ->on(DB::raw('COALESCE(vw_account_trade_groups.group_id, 0)'), '=', DB::raw('COALESCE(account_trades.group_id, 0)'));
         });
     }
+
+    /**
+     * @return string
+     */
+    public function getGraphAbbreviation() {
+        $abbreviation = $this->side == AccountTrade::SIDE_BUY ? 'B' : 'S';
+        $abbreviation .= $this->position == AccountTrade::POSITION_LONG ? 'L' : 'S';
+
+        return $abbreviation;
+    }
 }

@@ -111,7 +111,14 @@ abstract class Strategy {
      */
     private $candle_index = 0;
 
-    /****** ABSTACT FUNCTIONS *****/
+    /**
+     * Holds the drawdown value of the account
+     *
+     * @var float
+     */
+    protected $drawdown;
+
+    /****** ABSTRACT FUNCTIONS *****/
     abstract protected function executeStrategy(ExchangeCandle $candle);
     abstract protected function getName();
 
@@ -139,6 +146,7 @@ abstract class Strategy {
         $this->to = $to;
         $this->interval = $interval;
         $this->console = $console;
+        $this->drawdown = $this->account->getAccountSize();
 
         $this->candles = $this->exchange->getCandlesByInterval($this->currency, $this->asset, $this->from, $this->to,
             $this->interval
@@ -185,7 +193,7 @@ abstract class Strategy {
         $backtest->winning_trades = $summary['winning_groups'];
         $backtest->losing_trades = $summary['losing_groups'];
         $backtest->total_trades = $backtest->winning_trades + $backtest->losing_trades;
-        $backtest->drawdown_percentage = 0;
+        $backtest->drawdown_percentage = $this->drawdown / $this->account->getAccountSize() * 100;
         $backtest->profit_percentage = (float) str_replace('%', '', $summary['profit_percent']);
         $backtest->buy_and_hold_percentage = ($this->candles->last()->close - $this->candles->first()->close) / $this->candles->first()->close * 100;
         $backtest->save();

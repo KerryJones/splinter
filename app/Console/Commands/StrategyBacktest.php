@@ -51,7 +51,7 @@ class StrategyBacktest extends Command
         ]);
         $console->writeln('<info>New account created: #' . $account->id . ' - ' . $account->name . '</info>');
 
-        $initial_deposit = 1000000;
+        $initial_deposit = 1000;
         $account->ledger->deposit($initial_deposit);
         $console->writeln('<info>Initial deposit of $' . number_format($initial_deposit) . ' deposited</info>');
 
@@ -63,13 +63,17 @@ class StrategyBacktest extends Command
         $trader = new FantasyTrader($exchange, $account);
 
         // Date range
-        $from = Carbon::parse('2017-08-24 15:00:00');
-        $to = Carbon::now();
+        $from = Carbon::parse('2017-10-01 00:00:00');
+        $to = Carbon::parse('2018-01-01 00:00:00');
 
         // Create the strategy
         $strategy = new Turtle($exchange, $trader, $account, 'USD', 'ETH', $from, $to, 4, $console);
         $strategy->setDonchianBreakoutLength(9);
         $strategy->setExitBreakoutLength(7);
+        $strategy->setMaxUnitsPerMarket(20);
+        $strategy->setShort(false);
+        $strategy->setPyramid(false);
+        $strategy->setMaxUnitsPerMarket(1);
 
         $console->writeln('New strategy implemented to perform backtest: ' . 'USDETH' . ' - ' . $from->toDateTimeString() . ' > ' . $to->toDateTimeString());
 

@@ -18,4 +18,6 @@ mix
     .js('resources/assets/js/app.js', 'public/js')
     .sass('resources/assets/sass/app.scss', 'public/css')
     .sass('node_modules/bulma/bulma.sass', 'public/css')
+    .copy('node_modules/datatables-bulma/css/dataTables.bulma.css', 'public/css')
+    .copy('node_modules/datatables-bulma/js/dataTables.bulma.min.js', 'public/js')
     .version();
